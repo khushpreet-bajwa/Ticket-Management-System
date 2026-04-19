@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ticket Booking System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-shape one"></div>
+  <div class="bg-shape two"></div>
+
+  <div class="container">
+    <div class="hero">
+      <h1>🎟 Ticket Booking System</h1>
+      <p>Modern UI • C++ Backend • Confirmed Ticket Layout</p>
+    </div>
+
+    <div class="main-grid">
+      <div class="card booking-card">
+        <h2>Book Your Ticket</h2>
+
+        <label>Passenger Name</label>
+        <input type="text" id="name" placeholder="Enter passenger name" />
+
+        <label>Source</label>
+        <select id="source">
+          <option value="">Select Source</option>
+          <option value="Delhi">Delhi</option>
+          <option value="Chandigarh">Chandigarh</option>
+          <option value="Jaipur">Jaipur</option>
+          <option value="Mumbai">Mumbai</option>
+          <option value="Amritsar">Amritsar</option>
+        </select>
+
+        <label>Destination</label>
+        <select id="destination">
+          <option value="">Select Destination</option>
+          <option value="Delhi">Delhi</option>
+          <option value="Chandigarh">Chandigarh</option>
+          <option value="Jaipur">Jaipur</option>
+          <option value="Mumbai">Mumbai</option>
+          <option value="Amritsar">Amritsar</option>
+        </select>
+
+        <label>Journey Date</label>
+        <input type="date" id="journeyDate" />
+
+        <div class="btn-row">
+          <button onclick="bookTicket()">Confirm Ticket</button>
+          <button class="secondary" onclick="showSeats()">Available Seats</button>
+        </div>
+      </div>
+
+      <div class="card action-card">
+        <h2>Manage Booking</h2>
+
+        <label>Ticket ID</label>
+        <input type="number" id="cancelId" placeholder="Enter ticket ID" />
+
+        <div class="btn-row vertical">
+          <button onclick="cancelTicket()">Cancel Ticket</button>
+          <button onclick="undoCancel()">Undo Last Cancellation</button>
+          <button onclick="showTickets()">Show All Tickets</button>
+          <button onclick="showWaiting()">Show Waiting List</button>
+          <button onclick="showHistory()">Show Cancel History</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ticketContainer"></div>
+
+    <div class="output-card">
+      <h2>System Output</h2>
+      <pre id="output">System ready...</pre>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
