@@ -63,21 +63,31 @@ CancelledTicket cancelStack[MAX_CANCEL];
 int top = -1;
 
 // -------------------- GLOBALS --------------------
-bool seatOccupied[TOTAL_SEATS + 1] = {false};
 int nextTicketID = 1001;
 
-// -------------------- HELPERS --------------------
-int getAvailableSeat() {
+// -------------------- DATE-WISE SEAT HELPERS --------------------
+int getAvailableSeat(const string& date) {
+    bool used[TOTAL_SEATS + 1] = {false};
+
+    TicketNode* temp = head;
+    while (temp != NULL) {
+        if (temp->journeyDate == date) {
+            used[temp->seatNo] = true;
+        }
+        temp = temp->next;
+    }
+
     for (int i = 1; i <= TOTAL_SEATS; i++) {
-        if (!seatOccupied[i]) {
+        if (!used[i]) {
             return i;
         }
     }
+
     return -1;
 }
 
-bool hasAvailableSeat() {
-    return getAvailableSeat() != -1;
+bool hasAvailableSeat(const string& date) {
+    return getAvailableSeat(date) != -1;
 }
 
 // -------------------- LINKED LIST --------------------
@@ -93,8 +103,6 @@ void insertBookedTicket(int id, string name, string src, string dest, string dat
         }
         temp->next = newNode;
     }
-
-    seatOccupied[seatNo] = true;
 }
 
 TicketNode* searchBookedTicket(int ticketID) {
@@ -156,19 +164,6 @@ void enqueueWaitingPassenger(string name, string src, string dest, string date) 
     waitingQueue[rearQ].source = src;
     waitingQueue[rearQ].destination = dest;
     waitingQueue[rearQ].journeyDate = date;
-}
-
-WaitingPassenger dequeueWaitingPassenger() {
-    WaitingPassenger temp;
-    temp.requestID = -1;
-
-    if (isWaitingQueueEmpty()) {
-        return temp;
-    }
-
-    temp = waitingQueue[frontQ];
-    frontQ++;
-    return temp;
 }
 
 string getWaitingListText() {
@@ -250,35 +245,50 @@ string getCancelHistoryText() {
     return out.str();
 }
 
-// -------------------- MAIN LOGIC --------------------
-string assignSeatToWaitingPassenger() {
-    if (!hasAvailableSeat() || isWaitingQueueEmpty()) {
+// -------------------- DATE-WISE WAITING AUTO ASSIGN --------------------
+string assignSeatToWaitingPassenger(const string& date) {
+    if (!hasAvailableSeat(date) || isWaitingQueueEmpty()) {
         return "";
     }
 
-    WaitingPassenger p = dequeueWaitingPassenger();
-    if (p.requestID == -1) {
-        return "";
+    for (int i = frontQ; i <= rearQ; i++) {
+        if (waitingQueue[i].journeyDate == date) {
+            WaitingPassenger p = waitingQueue[i];
+
+            for (int j = i; j < rearQ; j++) {
+                waitingQueue[j] = waitingQueue[j + 1];
+            }
+            rearQ--;
+
+            if (rearQ < frontQ) {
+                frontQ = -1;
+                rearQ = -1;
+            }
+
+            int seat = getAvailableSeat(date);
+            insertBookedTicket(
+                p.requestID,
+                p.passengerName,
+                p.source,
+                p.destination,
+                p.journeyDate,
+                seat
+            );
+
+            ostringstream out;
+            out << "\nSeat automatically assigned to waiting passenger.\n";
+            out << "Ticket ID : " << p.requestID << "\n";
+            out << "Passenger : " << p.passengerName << "\n";
+            out << "Journey Date : " << p.journeyDate << "\n";
+            out << "Seat No   : " << seat << "\n";
+            return out.str();
+        }
     }
 
-    int seat = getAvailableSeat();
-    insertBookedTicket(
-        p.requestID,
-        p.passengerName,
-        p.source,
-        p.destination,
-        p.journeyDate,
-        seat
-    );
-
-    ostringstream out;
-    out << "\nSeat automatically assigned to waiting passenger.\n";
-    out << "Ticket ID : " << p.requestID << "\n";
-    out << "Passenger : " << p.passengerName << "\n";
-    out << "Seat No   : " << seat << "\n";
-    return out.str();
+    return "";
 }
 
+// -------------------- MAIN LOGIC --------------------
 string bookTicket(string name, string src, string dest, string date) {
     if (name.empty() || src.empty() || dest.empty() || date.empty()) {
         return "Please fill all fields.";
@@ -290,8 +300,8 @@ string bookTicket(string name, string src, string dest, string date) {
 
     ostringstream out;
 
-    if (hasAvailableSeat()) {
-        int seat = getAvailableSeat();
+    if (hasAvailableSeat(date)) {
+        int seat = getAvailableSeat(date);
         int id = nextTicketID++;
 
         insertBookedTicket(id, name, src, dest, date, seat);
@@ -306,7 +316,7 @@ string bookTicket(string name, string src, string dest, string date) {
         out << "Ticket Confirmed";
     } else {
         enqueueWaitingPassenger(name, src, dest, date);
-        out << "No seat available.\n";
+        out << "No seat available for " << date << ".\n";
         out << "Passenger added to waiting list successfully.";
     }
 
@@ -330,6 +340,8 @@ string cancelTicket(int id) {
         return "Ticket not found.";
     }
 
+    string cancelledDate = temp->journeyDate;
+
     pushCancelledTicket(
         temp->ticketID,
         temp->passengerName,
@@ -338,8 +350,6 @@ string cancelTicket(int id) {
         temp->journeyDate,
         temp->seatNo
     );
-
-    seatOccupied[temp->seatNo] = false;
 
     if (prev == NULL) {
         head = temp->next;
@@ -352,7 +362,7 @@ string cancelTicket(int id) {
     ostringstream out;
     out << "Ticket cancelled successfully.\n";
 
-    string autoAssignMsg = assignSeatToWaitingPassenger();
+    string autoAssignMsg = assignSeatToWaitingPassenger(cancelledDate);
     if (!autoAssignMsg.empty()) {
         out << autoAssignMsg;
     }
@@ -368,10 +378,21 @@ string undoLastCancellation() {
     CancelledTicket last = popCancelledTicket();
 
     int seatToAssign = -1;
-    if (!seatOccupied[last.seatNo]) {
+    bool preferredSeatUsed = false;
+
+    TicketNode* temp = head;
+    while (temp != NULL) {
+        if (temp->journeyDate == last.journeyDate && temp->seatNo == last.seatNo) {
+            preferredSeatUsed = true;
+            break;
+        }
+        temp = temp->next;
+    }
+
+    if (!preferredSeatUsed) {
         seatToAssign = last.seatNo;
     } else {
-        seatToAssign = getAvailableSeat();
+        seatToAssign = getAvailableSeat(last.journeyDate);
     }
 
     if (seatToAssign == -1) {
@@ -383,7 +404,7 @@ string undoLastCancellation() {
             last.journeyDate,
             last.seatNo
         );
-        return "Undo not possible because all seats are occupied.";
+        return "Undo not possible because all seats are occupied for this date.";
     }
 
     insertBookedTicket(
@@ -399,6 +420,7 @@ string undoLastCancellation() {
     out << "Last cancelled ticket restored successfully.\n";
     out << "Ticket ID : " << last.ticketID << "\n";
     out << "Passenger : " << last.passengerName << "\n";
+    out << "Journey Date : " << last.journeyDate << "\n";
     out << "Seat No   : " << seatToAssign << "\n";
 
     return out.str();
@@ -423,13 +445,27 @@ string searchTicketByIDText(int id) {
     return out.str();
 }
 
-string getAvailableSeatsText() {
-    ostringstream out;
-    out << "Available Seats: ";
-    bool found = false;
+string getAvailableSeatsText(const string& date) {
+    if (date.empty()) {
+        return "Journey date is required.";
+    }
 
+    ostringstream out;
+    out << "Available Seats for " << date << ": ";
+
+    bool used[TOTAL_SEATS + 1] = {false};
+    TicketNode* temp = head;
+
+    while (temp != NULL) {
+        if (temp->journeyDate == date) {
+            used[temp->seatNo] = true;
+        }
+        temp = temp->next;
+    }
+
+    bool found = false;
     for (int i = 1; i <= TOTAL_SEATS; i++) {
-        if (!seatOccupied[i]) {
+        if (!used[i]) {
             out << i << " ";
             found = true;
         }
@@ -500,8 +536,9 @@ int main() {
         res.set_content(searchTicketByIDText(id), "text/plain");
     });
 
-    svr.Get("/seats", [](const Request&, Response& res) {
-        res.set_content(getAvailableSeatsText(), "text/plain");
+    svr.Get("/seats", [](const Request& req, Response& res) {
+        string date = req.has_param("date") ? req.get_param_value("date") : "";
+        res.set_content(getAvailableSeatsText(date), "text/plain");
     });
 
     int port = 10000;
